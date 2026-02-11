@@ -15,8 +15,10 @@ describe("generateWingV1", () => {
       ribCountPerHalf: 7,
       airfoil: { type: "naca4", code: "0012", samples: 60 },
       materialThickness: 3,
+      slotClearance: 0.25,
       kerf: 0.15,
-      spars: [{ xFrac: 0.3, slotWidth: 6.2, slotDepth: 40 }],
+      spars: [{ xFrac: 0.3, thickness: 6.0, slotDepth: 40 }],
+
     };
 
     const wing = generateWingV1(spec);

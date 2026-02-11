@@ -26,14 +26,14 @@ export type WingSpecV1 = {
   // Material / cutting
   materialThickness: number; // e.g. 3 (balsa) or 5 (foam)
   kerf: number; // laser kerf (v1 stored, not applied as offsets yet)
+  slotClearance: number; // added to spar thickness to make slot width
 
   // Spar slots in ribs
-  spars: Array<{
+   spars: Array<{
     xFrac: number; // 0..1 along chord (0 = LE, 1 = TE)
-    slotWidth: number; // spar thickness + clearance
+    thickness: number; // spar material thickness
     slotDepth: number; // slot height in the rib
   }>;
-};
 
 export type Rib2D = {
   id: string;

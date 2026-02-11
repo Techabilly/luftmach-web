@@ -19,10 +19,12 @@ const defaultSpec: WingSpecV1 = {
 
   materialThickness: 3,
   kerf: 0.15,
+slotClearance: 0.25,
 
   spars: [
-    { xFrac: 0.25, slotWidth: 6.2, slotDepth: 40 },
-    { xFrac: 0.6, slotWidth: 6.2, slotDepth: 35 },
+    { xFrac: 0.25, thickness: 6.0, slotDepth: 40 },
+    { xFrac: 0.25, thickness: 6.0, slotDepth: 40 },
+
   ],
 };
 

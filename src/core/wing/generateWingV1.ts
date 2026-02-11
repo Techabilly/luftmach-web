@@ -24,12 +24,13 @@ export function generateWingV1(spec: WingSpecV1): WingArtifactsV1 {
 
     const slots = spec.spars.map((s, idx) => {
       const cx = s.xFrac * chord;
+      const slotW = s.thickness + spec.slotClearance;
       return {
-        id: `spar-${idx}`,
+        id: `slot-${idx}`,
         rect: {
-          x: cx - s.slotWidth / 2,
+          x: cx - slotW / 2,
           y: -s.slotDepth / 2,
-          w: s.slotWidth,
+          w: slotW,
           h: s.slotDepth,
         },
       };
@@ -57,10 +58,13 @@ function assertSpec(spec: WingSpecV1): void {
   if (spec.rootChord <= 0 || spec.tipChord <= 0) throw new Error("rootChord and tipChord must be > 0");
   if (spec.ribCountPerHalf < 2) throw new Error("ribCountPerHalf must be >= 2");
   if (!/^\d{4}$/.test(spec.airfoil.code)) throw new Error('airfoil.code must be a 4-digit string like "0012"');
+  if (spec.slotClearance < 0) throw new Error("slotClearance must be >= 0");
+
   if (spec.airfoil.samples < 20) throw new Error("airfoil.samples must be >= 20");
 
   for (const s of spec.spars) {
     if (s.xFrac < 0 || s.xFrac > 1) throw new Error("spar xFrac must be in [0..1]");
-    if (s.slotWidth <= 0 || s.slotDepth <= 0) throw new Error("spar slotWidth/slotDepth must be > 0");
+    if (s.thickness <= 0 || s.slotDepth <= 0) throw new Error("spar thickness/slotDepth must be > 0");
+
   }
 }
