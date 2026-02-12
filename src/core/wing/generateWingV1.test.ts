@@ -3,7 +3,7 @@ import type { WingSpecV1 } from "../types";
 import { generateWingV1 } from "./generateWingV1";
 
 describe("generateWingV1", () => {
-  test("generates ribs with closed outlines and open-notch cutouts", () => {
+  test("generates ribs with closed outlines and square U-notches", () => {
     const spec: WingSpecV1 = {
       version: 1,
       units: "mm",
@@ -20,27 +20,39 @@ describe("generateWingV1", () => {
       kerf: 0.15,
       slotClearance: 0.25,
 
-      spars: [
-       { xFrac: 0.3, stockSize: 3.175, edge: "both" }
-      ],
+      spars: [{ xFrac: 0.3, stockSize: 3.175, edge: "both" }],
+
+      ribFeatures: {
+        lighteningHoles: {
+          enabled: true,
+          count: 2,
+          radiusFrac: 0.06,
+          xStartFrac: 0.3,
+          xEndFrac: 0.7,
+          yOffsetFrac: 0,
+        },
+      },
     };
 
     const wing = generateWingV1(spec);
     expect(wing.ribs.length).toBe(7);
 
     for (const rib of wing.ribs) {
-      // outline should be closed
       const first = rib.outline[0];
       const last = rib.outline[rib.outline.length - 1];
       expect(first.x).toBe(last.x);
       expect(first.y).toBe(last.y);
 
-      // should create 2 notch rectangles when edge === "both"
-      expect(rib.slots.length).toBe(2);
-
-      for (const cut of rib.slots) {
-        expect(cut.rect.w).toBeGreaterThan(0);
-        expect(cut.rect.h).toBeGreaterThan(0);
+      // Should include 2 notches for edge="both" plus optional holes
+      const notchRects = rib.cutouts.filter((c) => c.kind === "rect");
+      expect(notchRects.length).toBe(2);
+      for (const c of notchRects) {
+        if (c.kind === "rect") {
+          expect(c.w).toBeGreaterThan(0);
+          expect(c.h).toBeGreaterThan(0);
+          // square notch
+          expect(c.w).toBeCloseTo(c.h, 6);
+        }
       }
     }
   });

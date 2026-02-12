@@ -1,4 +1,5 @@
-import type { WingArtifactsV1, WingSpecV1 } from "../types";
+import type { CutPrimitive, WingArtifactsV1, WingSpecV1 } from "../types";
+import { pointInPolygon } from "../geom/pointInPoly";
 import { naca4Polygon } from "./naca4";
 
 export function generateWingV1(spec: WingSpecV1): WingArtifactsV1 {
@@ -7,8 +8,11 @@ export function generateWingV1(spec: WingSpecV1): WingArtifactsV1 {
   const halfSpan = spec.span / 2;
   const ribs = [];
 
-  // Includes root (t=0) and tip (t=1)
   const count = Math.max(2, Math.floor(spec.ribCountPerHalf));
+
+  // Planform derivatives for spar angle (constant for linear sweep + linear taper)
+  const dChordDy = (spec.tipChord - spec.rootChord) / halfSpan;
+  const dXLEdy = spec.sweepLE / halfSpan;
 
   for (let i = 0; i < count; i++) {
     const t = i / (count - 1);
@@ -16,62 +20,79 @@ export function generateWingV1(spec: WingSpecV1): WingArtifactsV1 {
 
     const chord = lerp(spec.rootChord, spec.tipChord, t);
 
-    // Airfoil outline in chord-space [0..1]; scale to chord length.
     const outline = naca4Polygon(spec.airfoil.code, spec.airfoil.samples).map((p) => ({
       x: p.x * chord,
       y: p.y * chord,
     }));
 
-    // Open U-notches that touch the rib perimeter (top/bottom/both)
-    const slots = spec.spars.flatMap((s, idx) => {
+    const cutouts: CutPrimitive[] = [];
+
+    // --- Spar notches (open U-notches to perimeter) ---
+    for (let sIdx = 0; sIdx < spec.spars.length; sIdx++) {
+      const s = spec.spars[sIdx];
       const cx = s.xFrac * chord;
 
-      // Notch width is stock stick size + clearance
-     const notchW = s.stockSize + spec.slotClearance;
-     const notchH = notchW; // square notch
+      // Base square notch size from stock size + clearance
+      const base = s.stockSize + spec.slotClearance;
 
+      // Spar angle in planform due to sweep + taper at this xFrac
+      const dxdy = dXLEdy + s.xFrac * dChordDy;
+      const phi = Math.atan(dxdy);
+      const widen = 1 / Math.max(0.2, Math.cos(phi)); // clamp to avoid absurd widths
 
-      // Find rib top and bottom at this x by intersecting outline with vertical line
+      // Effective notch size in rib template
+      const notchSize = base * widen;
+
       const { yTop, yBottom } = yExtremaAtX(outline, cx);
 
-      const rects: Array<{
-        id: string;
-        rect: { x: number; y: number; w: number; h: number };
-      }> = [];
-
       if (s.edge === "top" || s.edge === "both") {
-        rects.push({
-          id: `notch-top-${idx}`,
-          rect: {
-            x: cx - notchW / 2,
-            y: yTop - notchH,
-            w: notchW,
-            h: notchH,
-          },
+        cutouts.push({
+          kind: "rect",
+          id: `notch-top-${sIdx}`,
+          x: cx - notchSize / 2,
+          y: yTop - notchSize,
+          w: notchSize,
+          h: notchSize,
         });
       }
 
       if (s.edge === "bottom" || s.edge === "both") {
-        rects.push({
-          id: `notch-bottom-${idx}`,
-          rect: {
-            x: cx - notchW / 2,
-            y: yBottom,
-            w: notchW,
-            h: notchH,
-          },
+        cutouts.push({
+          kind: "rect",
+          id: `notch-bottom-${sIdx}`,
+          x: cx - notchSize / 2,
+          y: yBottom,
+          w: notchSize,
+          h: notchSize,
         });
       }
+    }
 
-      return rects;
-    });
+    // --- Lightening holes ---
+    const lh = spec.ribFeatures.lighteningHoles;
+    if (lh.enabled && lh.count > 0) {
+      const r = clamp(lh.radiusFrac, 0.005, 0.25) * chord;
+      const x0 = clamp(lh.xStartFrac, 0.05, 0.95) * chord;
+      const x1 = clamp(lh.xEndFrac, 0.05, 0.95) * chord;
+      const yOff = lh.yOffsetFrac * chord;
+
+      for (let k = 0; k < lh.count; k++) {
+        const u = lh.count === 1 ? 0.5 : k / (lh.count - 1);
+        const hx = lerp(x0, x1, u);
+        const hy = yOff;
+
+        if (pointInPolygon({ x: hx, y: hy }, outline)) {
+          cutouts.push({ kind: "circle", id: `lh-${k}`, cx: hx, cy: hy, r });
+        }
+      }
+    }
 
     ribs.push({
       id: `rib-${i}`,
       stationY,
       chord,
       outline,
-      slots,
+      cutouts,
     });
   }
 
@@ -82,6 +103,10 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
+}
+
 function assertSpec(spec: WingSpecV1): void {
   if (spec.version !== 1) throw new Error("WingSpecV1 version mismatch");
   if (spec.span <= 0) throw new Error("span must be > 0");
@@ -89,8 +114,8 @@ function assertSpec(spec: WingSpecV1): void {
   if (spec.ribCountPerHalf < 2) throw new Error("ribCountPerHalf must be >= 2");
   if (!/^\d{4}$/.test(spec.airfoil.code)) throw new Error('airfoil.code must be a 4-digit string like "0012"');
   if (spec.airfoil.samples < 20) throw new Error("airfoil.samples must be >= 20");
-
   if (spec.slotClearance < 0) throw new Error("slotClearance must be >= 0");
+  if (spec.kerf < 0) throw new Error("kerf must be >= 0");
 
   for (const s of spec.spars) {
     if (s.xFrac < 0 || s.xFrac > 1) throw new Error("spar xFrac must be in [0..1]");
@@ -99,10 +124,7 @@ function assertSpec(spec: WingSpecV1): void {
   }
 }
 
-function yExtremaAtX(
-  outline: Array<{ x: number; y: number }>,
-  x: number
-): { yTop: number; yBottom: number } {
+function yExtremaAtX(outline: Array<{ x: number; y: number }>, x: number): { yTop: number; yBottom: number } {
   const ys: number[] = [];
 
   for (let i = 0; i < outline.length - 1; i++) {
@@ -113,7 +135,6 @@ function yExtremaAtX(
     const maxX = Math.max(a.x, b.x);
     if (x < minX || x > maxX) continue;
 
-    // Vertical segment: if it lies on x, include endpoints
     if (a.x === b.x) {
       if (a.x === x) ys.push(a.y, b.y);
       continue;
@@ -122,8 +143,7 @@ function yExtremaAtX(
     const t = (x - a.x) / (b.x - a.x);
     if (t < 0 || t > 1) continue;
 
-    const y = a.y + t * (b.y - a.y);
-    ys.push(y);
+    ys.push(a.y + t * (b.y - a.y));
   }
 
   if (ys.length === 0) return { yTop: 0, yBottom: 0 };
