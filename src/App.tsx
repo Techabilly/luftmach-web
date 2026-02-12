@@ -45,21 +45,26 @@ export default function App() {
   const [sheetIndex, setSheetIndex] = useState(0);
 
   const wing = useMemo(() => generateWingV1(spec), [spec]);
- const [svgUrl, setSvgUrl] = useState<string>("");
 
-useEffect(() => {
-  const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  setSvgUrl(url);
-  return () => URL.revokeObjectURL(url);
-}, [svg]);
+  const svgs = useMemo(() => {
+    const parts = wingToParts(wing);
+    const layout = packPartsToSheets(parts, sheet);
+    return layoutToSheetSvgs(layout, sheet, { showLabels: true, showSheetBorder: true });
+  }, [wing, sheet]);
 
+  const svg = svgs[Math.min(sheetIndex, svgs.length - 1)] ?? "";
 
-  // Make a download URL for the SVG string
-  const svgUrl = useMemo(() => {
+  const [svgUrl, setSvgUrl] = useState<string>("");
+
+  useEffect(() => {
     const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
-    return URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
+    setSvgUrl(url);
+    return () => URL.revokeObjectURL(url);
   }, [svg]);
+
+
+
 
   function updateNumber(key: keyof WingSpecV1) {
     return (value: number) => setSpec((s) => ({ ...s, [key]: value as any }));
