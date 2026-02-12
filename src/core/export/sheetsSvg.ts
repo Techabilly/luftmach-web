@@ -1,5 +1,4 @@
-import type { SheetSpec } from "./layoutTypes";
-import type { LayoutResult } from "./layoutTypes";
+import type { LayoutResult, SheetSpec } from "./layoutTypes";
 
 type SvgSheetOptions = {
   showLabels: boolean;
@@ -7,7 +6,7 @@ type SvgSheetOptions = {
 };
 
 export function layoutToSheetSvgs(layout: LayoutResult, sheet: SheetSpec, opts: SvgSheetOptions): string[] {
-  return layout.sheets.map((s) => {
+  return layout.sheets.map((s: LayoutResult["sheets"][number]) => {
     const border = opts.showSheetBorder
       ? `<rect x="0" y="0" width="${sheet.width}" height="${sheet.height}" fill="none" stroke="black" stroke-width="0.3" />`
       : "";

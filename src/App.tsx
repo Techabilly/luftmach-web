@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 import type { WingSpecV1 } from "./core/types";
 import { generateWingV1 } from "./core/wing/generateWingV1";
-import { wingToSvg } from "./core/export/svg";
 import { wingToParts } from "./core/export/wingParts";
 import { packPartsToSheets } from "./core/export/pack";
 import type { SheetSpec } from "./core/export/layoutTypes";
@@ -98,10 +97,10 @@ export default function App() {
         </div>
 
         <h3 style={{ marginTop: 16 }}>Sheet</h3>
-        <Field label="Sheet width (mm)" value={sheet.width} onChange={(v) => setSheet((s) => ({ ...s, width: v }))} />
-        <Field label="Sheet height (mm)" value={sheet.height} onChange={(v) => setSheet((s) => ({ ...s, height: v }))} />
-        <Field label="Margin (mm)" value={sheet.margin} onChange={(v) => setSheet((s) => ({ ...s, margin: v }))} />
-        <Field label="Spacing (mm)" value={sheet.spacing} onChange={(v) => setSheet((s) => ({ ...s, spacing: v }))} />
+        <Field label="Sheet width (mm)" value={sheet.width} onChange={(v) => setSheet((s: SheetSpec)  => ({ ...s, width: v }))} />
+        <Field label="Sheet height (mm)" value={sheet.height} onChange={(v) => setSheet((s: SheetSpec)  => ({ ...s, height: v }))} />
+        <Field label="Margin (mm)" value={sheet.margin} onChange={(v) => setSheet((s: SheetSpec)  => ({ ...s, margin: v }))} />
+        <Field label="Spacing (mm)" value={sheet.spacing} onChange={(v) => setSheet((s: SheetSpec)  => ({ ...s, spacing: v }))} />
 
         <div style={{ marginTop: 12 }}>
           <label style={{ display: "block", fontSize: 12, opacity: 0.8 }}>Preview sheet</label>
