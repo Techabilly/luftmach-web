@@ -1,4 +1,4 @@
-import type { WingArtifactsV1, WingSpecV1 } from "../types";
+import type { Spar2D, WingArtifactsV1, WingSpecV1 } from "../types";
 import { naca4Polygon } from "./naca4";
 
 export function generateWingV1(spec: WingSpecV1): WingArtifactsV1 {
@@ -44,8 +44,28 @@ export function generateWingV1(spec: WingSpecV1): WingArtifactsV1 {
       slots,
     });
   }
+  const spars: Spar2D[] = spec.spars.map((s, idx) => {
+    // v1: one spar per half wing. Later we'll support full-span joins/dihedral breaks.
+    const length = halfSpan;
 
-  return { spec, ribs };
+    // Represent the spar as a simple rectangle: (0,0) to (length, thickness)
+    const outline = [
+      { x: 0, y: 0 },
+      { x: length, y: 0 },
+      { x: length, y: s.thickness },
+      { x: 0, y: s.thickness },
+      { x: 0, y: 0 },
+    ];
+
+    return {
+      id: `spar-${idx}`,
+      length,
+      width: s.thickness,
+      outline,
+    };
+  });
+
+  return { spec, ribs, spars };
 }
 
 function lerp(a: number, b: number, t: number): number {

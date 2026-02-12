@@ -51,8 +51,15 @@ export type Rib2D = {
     rect: { x: number; y: number; w: number; h: number };
   }>;
 };
-
+export type Spar2D = {
+  id: string;
+  length: number;  // in spec units
+  width: number;   // spar thickness (material dimension)
+  outline: Array<{ x: number; y: number }>; // closed polygon
+};
 export type WingArtifactsV1 = {
   spec: WingSpecV1;
   ribs: Rib2D[];
+  spars: Spar2D[];
 };
+

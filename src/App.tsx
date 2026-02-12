@@ -3,6 +3,10 @@ import "./App.css";
 import type { WingSpecV1 } from "./core/types";
 import { generateWingV1 } from "./core/wing/generateWingV1";
 import { wingToSvg } from "./core/export/svg";
+import { wingToParts } from "./core/export/wingParts";
+import { packPartsToSheets } from "./core/export/pack";
+import type { SheetSpec } from "./core/export/layoutTypes";
+import { layoutToSheetSvgs } from "./core/export/sheetsSvg";
 
 const defaultSpec: WingSpecV1 = {
   version: 1,
@@ -28,19 +32,26 @@ slotClearance: 0.25,
   ],
 };
 
+const defaultSheet: SheetSpec = {
+  width: 600,
+  height: 300,
+  margin: 10,
+  spacing: 6,
+};
+
 export default function App() {
   const [spec, setSpec] = useState<WingSpecV1>(defaultSpec);
+  const [sheet, setSheet] = useState<SheetSpec>(defaultSheet);
+  const [sheetIndex, setSheetIndex] = useState(0);
 
   const wing = useMemo(() => generateWingV1(spec), [spec]);
-  const svg = useMemo(
-    () =>
-      wingToSvg(wing, {
-        margin: 10,
-        ribSpacing: 20,
-        showLabels: true,
-      }),
-    [wing]
-  );
+  const svgs = useMemo(() => {
+    const parts = wingToParts(wing);
+    const layout = packPartsToSheets(parts, sheet);
+    return layoutToSheetSvgs(layout, sheet, { showLabels: true, showSheetBorder: true });
+  }, [wing, sheet]);
+
+  const svg = svgs[Math.min(sheetIndex, svgs.length - 1)] ?? "";
 
   // Make a download URL for the SVG string
   const svgUrl = useMemo(() => {
@@ -77,6 +88,34 @@ export default function App() {
             onChange={(e) => setSpec((s) => ({ ...s, airfoil: { ...s.airfoil, code: e.target.value } }))}
             style={{ width: "100%" }}
           />
+        </div>
+
+        <h3 style={{ marginTop: 16 }}>Sheet</h3>
+        <Field label="Sheet width (mm)" value={sheet.width} onChange={(v) => setSheet((s) => ({ ...s, width: v }))} />
+        <Field label="Sheet height (mm)" value={sheet.height} onChange={(v) => setSheet((s) => ({ ...s, height: v }))} />
+        <Field label="Margin (mm)" value={sheet.margin} onChange={(v) => setSheet((s) => ({ ...s, margin: v }))} />
+        <Field label="Spacing (mm)" value={sheet.spacing} onChange={(v) => setSheet((s) => ({ ...s, spacing: v }))} />
+
+        <div style={{ marginTop: 12 }}>
+          <label style={{ display: "block", fontSize: 12, opacity: 0.8 }}>Preview sheet</label>
+          <select value={sheetIndex} onChange={(e) => setSheetIndex(Number(e.target.value))} style={{ width: "100%" }}>
+            {svgs.map((_, i) => (
+              <option key={i} value={i}>
+                Sheet {i + 1} of {svgs.length}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+          {svgs.map((s, i) => {
+            const url = URL.createObjectURL(new Blob([s], { type: "image/svg+xml;charset=utf-8" }));
+            return (
+              <a key={i} href={url} download={`wing_sheet_${i + 1}.svg`}>
+                <button>Download Sheet {i + 1}</button>
+              </a>
+            );
+          })}
         </div>
 
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
