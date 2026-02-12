@@ -34,7 +34,7 @@ const defaultSpec: WingSpecV1 = {
 
   ribFeatures: {
     lighteningHoles: {
-      enabled: true,
+      enabled: false, // ✅ default OFF (your request)
       count: 2,
       radiusFrac: 0.06,
       xStartFrac: 0.32,
@@ -126,6 +126,35 @@ export default function App() {
 
   const selectedSheetCount = sheetSvgs.length;
 
+  const sparDiagnostics = useMemo(() => {
+    const halfSpan = spec.span / 2;
+    const dChordDy = (spec.tipChord - spec.rootChord) / halfSpan;
+    const dXLEdy = spec.sweepLE / halfSpan;
+
+    return spec.spars.map((s, i) => {
+      const dxdy = dXLEdy + s.xFrac * dChordDy;
+      const angleRad = Math.atan(dxdy);
+      const angleDeg = (angleRad * 180) / Math.PI;
+
+      const cos = Math.cos(angleRad);
+      const widen = 1 / Math.max(0.2, cos);
+
+      const base = s.stockSize + spec.slotClearance;
+      const effective = base * widen;
+
+      return {
+        i,
+        xFrac: s.xFrac,
+        edge: s.edge,
+        stockSize: s.stockSize,
+        base,
+        angleDeg,
+        widen,
+        effective,
+      };
+    });
+  }, [spec]);
+
   return (
     <div style={{ display: "grid", gridTemplateColumns: "420px 1fr", gap: 16, padding: 16 }}>
       <div style={{ border: "1px solid #3333", borderRadius: 10, padding: 12 }}>
@@ -156,11 +185,8 @@ export default function App() {
           <input
             value={nacaInput}
             onChange={(e) => {
-              const raw = e.target.value;
-              const cleaned = raw.replace(/[^\d]/g, "").slice(0, 4);
+              const cleaned = e.target.value.replace(/[^\d]/g, "").slice(0, 4);
               setNacaInput(cleaned);
-
-              // Only update spec when valid
               if (/^\d{4}$/.test(cleaned)) {
                 setSpec((s) => ({ ...s, airfoil: { ...s.airfoil, code: cleaned } }));
               }
@@ -260,6 +286,25 @@ export default function App() {
             </div>
           </div>
         ))}
+
+        <div style={{ marginTop: 12, border: "1px dashed #3336", borderRadius: 8, padding: 10 }}>
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>Spar diagnostics</div>
+          <div style={{ fontSize: 12, opacity: 0.8 }}>
+            Angle and notch widening derived from sweep + taper.
+          </div>
+          <div style={{ marginTop: 8, fontSize: 12 }}>
+            {sparDiagnostics.map((d) => (
+              <div key={d.i} style={{ marginBottom: 6 }}>
+                <div>
+                  <strong>Spar {d.i + 1}</strong> — x={d.xFrac.toFixed(2)}, edge={d.edge}
+                </div>
+                <div style={{ opacity: 0.85 }}>
+                  angle={d.angleDeg.toFixed(1)}° · widen={d.widen.toFixed(3)} · base={(d.base).toFixed(2)}mm · effective={(d.effective).toFixed(2)}mm
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
 
         <h3 style={{ marginTop: 16, marginBottom: 8 }}>Rib realism</h3>
 
@@ -438,7 +483,6 @@ function presetMm(val: string): number {
   if (val === "1/16") return (1 / 16) * 25.4;
   if (val === "1/8") return (1 / 8) * 25.4;
   if (val === "1/4") return (1 / 4) * 25.4;
-  // custom selection leaves current; caller uses custom input
   return (1 / 8) * 25.4;
 }
 
