@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 import type { WingSpecV1 } from "./core/types";
 import { generateWingV1 } from "./core/wing/generateWingV1";
@@ -45,13 +45,15 @@ export default function App() {
   const [sheetIndex, setSheetIndex] = useState(0);
 
   const wing = useMemo(() => generateWingV1(spec), [spec]);
-  const svgs = useMemo(() => {
-    const parts = wingToParts(wing);
-    const layout = packPartsToSheets(parts, sheet);
-    return layoutToSheetSvgs(layout, sheet, { showLabels: true, showSheetBorder: true });
-  }, [wing, sheet]);
+ const [svgUrl, setSvgUrl] = useState<string>("");
 
-  const svg = svgs[Math.min(sheetIndex, svgs.length - 1)] ?? "";
+useEffect(() => {
+  const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  setSvgUrl(url);
+  return () => URL.revokeObjectURL(url);
+}, [svg]);
+
 
   // Make a download URL for the SVG string
   const svgUrl = useMemo(() => {
@@ -136,7 +138,13 @@ export default function App() {
       <div style={{ border: "1px solid #3333", borderRadius: 10, padding: 12 }}>
         <h3 style={{ marginTop: 0 }}>SVG Preview</h3>
         <div style={{ width: "100%", height: "75vh", border: "1px solid #3333", borderRadius: 8 }}>
-          <iframe title="svg-preview" src={svgUrl} style={{ width: "100%", height: "100%", border: "none" }} />
+          <iframe
+             key={sheetIndex}
+            title="svg-preview"
+            src={svgUrl}
+            style={{ width: "100%", height: "100%", border: "none" }}
+/>
+
         </div>
       </div>
     </div>
