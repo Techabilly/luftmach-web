@@ -21,7 +21,7 @@ describe("generateWingV1", () => {
       slotClearance: 0.25,
 
       spars: [
-        { xFrac: 0.3, stockSize: 3.175, notchDepth: 10, edge: "both" },
+       { xFrac: 0.3, stockSize: 3.175, edge: "both" }
       ],
     };
 
