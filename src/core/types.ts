@@ -28,12 +28,15 @@ export type WingSpecV1 = {
   kerf: number; // laser kerf (v1 stored, not applied as offsets yet)
   slotClearance: number; // added to spar thickness to make slot width
 
-  // Spar slots in ribs
+   // Spars are STOCK (sticks), not cut parts.
+  // They define open U-notches that touch the rib perimeter.
   spars: Array<{
     xFrac: number; // 0..1 along chord (0 = LE, 1 = TE)
-    thickness: number; // spar material thickness
-    slotDepth: number; // slot height in the rib
+   stockSize: number; // square stick size (same units as spec)
+    edge: "top" | "bottom" | "both";
+
   }>;
+
 };
 
 
@@ -51,15 +54,10 @@ export type Rib2D = {
     rect: { x: number; y: number; w: number; h: number };
   }>;
 };
-export type Spar2D = {
-  id: string;
-  length: number;  // in spec units
-  width: number;   // spar thickness (material dimension)
-  outline: Array<{ x: number; y: number }>; // closed polygon
-};
+
 export type WingArtifactsV1 = {
   spec: WingSpecV1;
   ribs: Rib2D[];
-  spars: Spar2D[];
+  
 };
 

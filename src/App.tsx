@@ -24,11 +24,11 @@ const defaultSpec: WingSpecV1 = {
   kerf: 0.15,
 slotClearance: 0.25,
 
-  spars: [
-    { xFrac: 0.25, thickness: 6.0, slotDepth: 40 },
-    { xFrac: 0.25, thickness: 6.0, slotDepth: 40 },
+spars: [
+  { xFrac: 0.25, stockSize: 3.175, edge: "both" }, // 1/8" in mm
+  { xFrac: 0.6,  stockSize: 3.175, edge: "both" },
+],
 
-  ],
 };
 
 const defaultSheet: SheetSpec = {

@@ -1,4 +1,4 @@
-import type { Spar2D, WingArtifactsV1, WingSpecV1 } from "../types";
+import type { WingArtifactsV1, WingSpecV1 } from "../types";
 import { naca4Polygon } from "./naca4";
 
 export function generateWingV1(spec: WingSpecV1): WingArtifactsV1 {
@@ -22,18 +22,48 @@ export function generateWingV1(spec: WingSpecV1): WingArtifactsV1 {
       y: p.y * chord,
     }));
 
-    const slots = spec.spars.map((s, idx) => {
+    // Open U-notches that touch the rib perimeter (top/bottom/both)
+    const slots = spec.spars.flatMap((s, idx) => {
       const cx = s.xFrac * chord;
-      const slotW = s.thickness + spec.slotClearance;
-      return {
-        id: `slot-${idx}`,
-        rect: {
-          x: cx - slotW / 2,
-          y: -s.slotDepth / 2,
-          w: slotW,
-          h: s.slotDepth,
-        },
-      };
+
+      // Notch width is stock stick size + clearance
+     const notchW = s.stockSize + spec.slotClearance;
+     const notchH = notchW; // square notch
+
+
+      // Find rib top and bottom at this x by intersecting outline with vertical line
+      const { yTop, yBottom } = yExtremaAtX(outline, cx);
+
+      const rects: Array<{
+        id: string;
+        rect: { x: number; y: number; w: number; h: number };
+      }> = [];
+
+      if (s.edge === "top" || s.edge === "both") {
+        rects.push({
+          id: `notch-top-${idx}`,
+          rect: {
+            x: cx - notchW / 2,
+            y: yTop - notchH,
+            w: notchW,
+            h: notchH,
+          },
+        });
+      }
+
+      if (s.edge === "bottom" || s.edge === "both") {
+        rects.push({
+          id: `notch-bottom-${idx}`,
+          rect: {
+            x: cx - notchW / 2,
+            y: yBottom,
+            w: notchW,
+            h: notchH,
+          },
+        });
+      }
+
+      return rects;
     });
 
     ribs.push({
@@ -44,28 +74,8 @@ export function generateWingV1(spec: WingSpecV1): WingArtifactsV1 {
       slots,
     });
   }
-  const spars: Spar2D[] = spec.spars.map((s, idx) => {
-    // v1: one spar per half wing. Later we'll support full-span joins/dihedral breaks.
-    const length = halfSpan;
 
-    // Represent the spar as a simple rectangle: (0,0) to (length, thickness)
-    const outline = [
-      { x: 0, y: 0 },
-      { x: length, y: 0 },
-      { x: length, y: s.thickness },
-      { x: 0, y: s.thickness },
-      { x: 0, y: 0 },
-    ];
-
-    return {
-      id: `spar-${idx}`,
-      length,
-      width: s.thickness,
-      outline,
-    };
-  });
-
-  return { spec, ribs, spars };
+  return { spec, ribs };
 }
 
 function lerp(a: number, b: number, t: number): number {
@@ -78,13 +88,51 @@ function assertSpec(spec: WingSpecV1): void {
   if (spec.rootChord <= 0 || spec.tipChord <= 0) throw new Error("rootChord and tipChord must be > 0");
   if (spec.ribCountPerHalf < 2) throw new Error("ribCountPerHalf must be >= 2");
   if (!/^\d{4}$/.test(spec.airfoil.code)) throw new Error('airfoil.code must be a 4-digit string like "0012"');
-  if (spec.slotClearance < 0) throw new Error("slotClearance must be >= 0");
-
   if (spec.airfoil.samples < 20) throw new Error("airfoil.samples must be >= 20");
+
+  if (spec.slotClearance < 0) throw new Error("slotClearance must be >= 0");
 
   for (const s of spec.spars) {
     if (s.xFrac < 0 || s.xFrac > 1) throw new Error("spar xFrac must be in [0..1]");
-    if (s.thickness <= 0 || s.slotDepth <= 0) throw new Error("spar thickness/slotDepth must be > 0");
-
+    if (s.stockSize <= 0) throw new Error("spar stockSize must be > 0");
+    if (s.edge !== "top" && s.edge !== "bottom" && s.edge !== "both") throw new Error("spar edge invalid");
   }
+}
+
+function yExtremaAtX(
+  outline: Array<{ x: number; y: number }>,
+  x: number
+): { yTop: number; yBottom: number } {
+  const ys: number[] = [];
+
+  for (let i = 0; i < outline.length - 1; i++) {
+    const a = outline[i];
+    const b = outline[i + 1];
+
+    const minX = Math.min(a.x, b.x);
+    const maxX = Math.max(a.x, b.x);
+    if (x < minX || x > maxX) continue;
+
+    // Vertical segment: if it lies on x, include endpoints
+    if (a.x === b.x) {
+      if (a.x === x) ys.push(a.y, b.y);
+      continue;
+    }
+
+    const t = (x - a.x) / (b.x - a.x);
+    if (t < 0 || t > 1) continue;
+
+    const y = a.y + t * (b.y - a.y);
+    ys.push(y);
+  }
+
+  if (ys.length === 0) return { yTop: 0, yBottom: 0 };
+
+  let yTop = -Infinity;
+  let yBottom = Infinity;
+  for (const y of ys) {
+    yTop = Math.max(yTop, y);
+    yBottom = Math.min(yBottom, y);
+  }
+  return { yTop, yBottom };
 }
