@@ -48,16 +48,19 @@ export function layoutToSheetSvgs(
           );
         }
       }
-
+      const b = polyBounds(p.outline);
+      const cx = p.x + (b.minX + b.maxX) / 2;
+      const cy = p.y + (b.minY + b.maxY) / 2;
       // ENGRAVE: label
       if (opts.showLabels) {
-        engraveParts.push(
-          `<text x="${p.x}"
-                 y="${p.y + p.height + 12}"
-                 font-size="10">
-             ${p.label ?? p.id}
-           </text>`
-        );
+      const label = p.label ?? p.id;
+const fontSize = clamp(Math.min(p.width, p.height) * 0.12, 6, 12);
+
+engraveParts.push(
+  `<text x="${cx}" y="${cy}" font-size="${fontSize}" text-anchor="middle" dominant-baseline="central">${escapeXml(
+    label
+  )}</text>`
+);
       }
     }
 
@@ -108,4 +111,32 @@ function pathD(
   }
   d += " Z";
   return d;
+}
+function clamp(v: number, lo: number, hi: number) {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+function escapeXml(s: string) {
+  return s
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+function polyBounds(poly: Array<{ x: number; y: number }>) {
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
+
+  for (const p of poly) {
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x);
+    maxY = Math.max(maxY, p.y);
+  }
+
+  if (!isFinite(minX)) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+  return { minX, minY, maxX, maxY };
 }
