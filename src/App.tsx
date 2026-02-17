@@ -32,16 +32,25 @@ const defaultSpec: WingSpecV1 = {
     { xFrac: 0.6, stockSize: (1 / 8) * INCH_TO_MM, edge: "both" },
   ],
 
-  ribFeatures: {
-    lighteningHoles: {
-      enabled: false, // ✅ default OFF (your request)
-      count: 2,
-      radiusFrac: 0.06,
-      xStartFrac: 0.32,
-      xEndFrac: 0.72,
-      yOffsetFrac: 0,
-    },
+ ribFeatures: {
+  lighteningHoles: {
+    enabled: false,
+    count: 2,
+    radiusFrac: 0.06,
+    xStartFrac: 0.32,
+    xEndFrac: 0.72,
+    yOffsetFrac: 0,
+    cornerFrac: 0.18,
   },
+  webLattice: {
+    enabled: false,            // initially off
+    betweenSpars: [0, 1],      // default between spar 1 and 2
+    pitch: 14,                 // lattice spacing in mm
+    angleDeg: 60,              // rotation
+    webMargin: 4,              // inset from spar boundaries
+    cornerRadius: 1.5,         // rounded corner radius
+  },
+},
 };
 
 const defaultSheet: SheetSpec = {
