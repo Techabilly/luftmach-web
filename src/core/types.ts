@@ -1,37 +1,30 @@
-export type Units = "mm" | "in";
-
 export type WingSpecV1 = {
   version: 1;
   units: Units;
 
-  // Planform (full wing)
-  span: number; // total wingspan
+  span: number;
   rootChord: number;
   tipChord: number;
-  sweepLE: number; // leading edge sweep offset at tip in same units as chord
+  sweepLE: number;
   dihedralDeg: number;
 
-  // Ribs (half-wing stations)
-  ribCountPerHalf: number; // includes root and tip
+  ribCountPerHalf: number;
   airfoil: {
     type: "naca4";
-    code: string; // e.g. "0012"
-    samples: number; // >= 20
+    code: string;
+    samples: number;
   };
 
-  // Material / cutting
   materialThickness: number;
   kerf: number;
   slotClearance: number;
 
-  // Spar sticks (NOT cut parts) -> create open U-notches
   spars: Array<{
-    xFrac: number; // 0..1 along chord
-    stockSize: number; // square stick size in spec units
+    xFrac: number;
+    stockSize: number;
     edge: "top" | "bottom" | "both";
   }>;
 
-  // Rib realism features
   ribFeatures: {
     lighteningHoles: {
       enabled: boolean;
@@ -40,6 +33,15 @@ export type WingSpecV1 = {
       xStartFrac: number;
       xEndFrac: number;
       yOffsetFrac: number;
+      cornerFrac: number;
+    };
+    webLattice: {
+      enabled: boolean;
+      betweenSpars: [number, number];
+      pitch: number;
+      angleDeg: number;
+      webMargin: number;
+      cornerRadius: number;
     };
   };
 };
