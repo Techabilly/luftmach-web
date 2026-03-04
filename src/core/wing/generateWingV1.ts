@@ -1,4 +1,4 @@
-import type { CutPrimitive, WingArtifactsV1, WingSpecV1 } from "../types";
+import type { CutPrimitive, Point, WingArtifactsV1, WingSpecV1 } from "../types";
 import { pointInPolygon } from "../geom/pointInPoly";
 import { naca4Polygon } from "./naca4";
 
@@ -6,7 +6,7 @@ export function generateWingV1(spec: WingSpecV1): WingArtifactsV1 {
   assertSpec(spec);
 
   const halfSpan = spec.span / 2;
-  const ribs = [];
+  const ribs: WingArtifactsV1["ribs"] = [];
 
   const count = Math.max(2, Math.floor(spec.ribCountPerHalf));
 
@@ -21,7 +21,7 @@ export function generateWingV1(spec: WingSpecV1): WingArtifactsV1 {
     const chord = lerp(spec.rootChord, spec.tipChord, t);
 
     // Airfoil outline (closed polygon)
-    const outline = naca4Polygon(spec.airfoil.code, spec.airfoil.samples).map((p) => ({
+    const outline: Point[] = naca4Polygon(spec.airfoil.code, spec.airfoil.samples).map((p) => ({
       x: p.x * chord,
       y: p.y * chord,
     }));
@@ -68,43 +68,14 @@ export function generateWingV1(spec: WingSpecV1): WingArtifactsV1 {
       }
     }
 
-    // --- Lightening holes as offset rounded triangles (F1: guaranteed fully inside) ---
-    const lh = spec.ribFeatures.lighteningHoles;
-    if (lh.enabled && lh.count > 0) {
-      const sizeBase = clamp(lh.radiusFrac, 0.01, 0.25) * chord;
-      const x0 = clamp(lh.xStartFrac, 0.05, 0.95) * chord;
-      const x1 = clamp(lh.xEndFrac, 0.05, 0.95) * chord;
+    // --- Step 1: compute web region polygon (between selected spars) ---
+    let webRegion: { betweenSpars: [number, number]; pts: Point[] } | undefined;
 
-      const baseY = lh.yOffsetFrac * chord;
-      const stagger = sizeBase * 0.35;
-
-      const cornerRadius = clamp(lh.cornerFrac, 0, 0.5) * sizeBase;
-
-      // Safety clearance margin from rib perimeter (in same units as model: mm)
-      const insetMargin = Math.max(spec.kerf, spec.materialThickness * 0.15, 0.5);
-
-      for (let k = 0; k < lh.count; k++) {
-        const u = lh.count === 1 ? 0.5 : k / (lh.count - 1);
-        const cx = lerp(x0, x1, u);
-
-        // alternate up/down offsets: +, -, +, ...
-        const cy = baseY + (k % 2 === 0 ? stagger : -stagger);
-
-        // alternate orientation for visual rhythm
-        const rotDeg = k % 2 === 0 ? 0 : 180;
-        const rotRad = (rotDeg * Math.PI) / 180;
-
-        // Try to fit: shrink if needed, then inset for margin
-        const fitted = fitTriangleHole(outline, cx, cy, sizeBase, rotRad, insetMargin);
-
-        if (fitted) {
-          cutouts.push({
-            kind: "poly",
-            id: `lh-tri-${k}`,
-            pts: fitted,
-            cornerRadius: cornerRadius > 0 ? Math.min(cornerRadius, sizeBase * 0.45) : undefined,
-          });
-        }
+    const wl = spec.ribFeatures.webLattice;
+    if (wl.enabled) {
+      const pts = webRegionBetweenSpars(outline, chord, spec.spars, wl.betweenSpars, wl.webMargin, 48);
+      if (pts.length >= 6) {
+        webRegion = { betweenSpars: wl.betweenSpars, pts };
       }
     }
 
@@ -114,6 +85,7 @@ export function generateWingV1(spec: WingSpecV1): WingArtifactsV1 {
       chord,
       outline,
       cutouts,
+      webRegion,
     });
   }
 
@@ -121,81 +93,76 @@ export function generateWingV1(spec: WingSpecV1): WingArtifactsV1 {
 }
 
 /**
- * F1: Ensure the lightening hole triangle fully fits inside the rib outline,
- * with an additional safety inset margin (so the cut doesn't clip the perimeter).
+ * Build a polygon that represents the "web region" inside the rib,
+ * bounded left/right by two spar x positions (with margin), and top/bottom by the airfoil outline.
  *
- * Strategy:
- * - Start with size r
- * - Create triangle points
- * - Inset them toward centroid by insetMargin (so we keep clearance)
- * - If all inset vertices are inside outline -> accept
- * - Otherwise shrink and retry
+ * Method:
+ * - compute xL/xR from spar indices and chord
+ * - apply webMargin
+ * - sample N x positions in [xL..xR]
+ * - for each x, find yTop/yBottom from outline intersections
+ * - create polygon: top chain (increasing x) + bottom chain (decreasing x)
  */
-function fitTriangleHole(
-  outline: Array<{ x: number; y: number }>,
-  cx: number,
-  cy: number,
-  rBase: number,
-  rotRad: number,
-  insetMargin: number
-): Array<{ x: number; y: number }> | null {
-  // quick reject: if center isn't inside, don't bother
-  if (!pointInPolygon({ x: cx, y: cy }, outline)) return null;
+export function webRegionBetweenSpars(
+  outline: Point[],
+  chord: number,
+  spars: Array<{ xFrac: number; stockSize: number; edge: "top" | "bottom" | "both" }>,
+  between: [number, number],
+  webMargin: number,
+  samples: number
+): Point[] {
+  const [a, b] = between;
+  if (a < 0 || b < 0 || a >= spars.length || b >= spars.length) return [];
+  if (a === b) return [];
 
-  let r = rBase;
+  const left = Math.min(a, b);
+  const right = Math.max(a, b);
 
-  // A few shrink attempts is plenty; this is fast and stable
-  for (let attempt = 0; attempt < 8; attempt++) {
-    const tri = equilateralTriangle(cx, cy, r, rotRad);
+  let xL = spars[left].xFrac * chord + webMargin;
+  let xR = spars[right].xFrac * chord - webMargin;
 
-    // Inset toward centroid to guarantee a clearance margin
-    const insetTri = insetTowardCentroid(tri, insetMargin);
+  if (!(xR > xL)) return [];
 
-    if (insetTri && allPointsInside(outline, insetTri)) {
-      return insetTri;
-    }
+  // Clamp within outline x-range
+  const { minX, maxX } = boundsX(outline);
+  const eps = 1e-3;
+  xL = clamp(xL, minX + eps, maxX - eps);
+  xR = clamp(xR, minX + eps, maxX - eps);
+  if (!(xR > xL)) return [];
 
-    r *= 0.85; // shrink and retry
-    if (r < rBase * 0.25) break; // don't produce tiny junk holes
+  const n = clampInt(samples, 12, 200);
+
+  const topPts: Point[] = [];
+  const botPts: Point[] = [];
+
+  for (let i = 0; i < n; i++) {
+    const u = i / (n - 1);
+    const x = lerp(xL, xR, u);
+    const { yTop, yBottom, ok } = yExtremaAtXSafe(outline, x);
+    if (!ok) continue;
+
+    topPts.push({ x, y: yTop });
+    botPts.push({ x, y: yBottom });
   }
 
-  return null;
-}
+  if (topPts.length < 3 || botPts.length < 3) return [];
 
-function allPointsInside(outline: Array<{ x: number; y: number }>, pts: Array<{ x: number; y: number }>): boolean {
-  for (const p of pts) {
-    if (!pointInPolygon(p, outline)) return false;
-  }
-  return true;
-}
+  // Build polygon: top left->right, bottom right->left
+  const poly: Point[] = [];
+  for (const p of topPts) poly.push(p);
+  for (let i = botPts.length - 1; i >= 0; i--) poly.push(botPts[i]);
 
-function insetTowardCentroid(
-  pts: Array<{ x: number; y: number }>,
-  inset: number
-): Array<{ x: number; y: number }> | null {
-  if (pts.length < 3) return null;
-
-  const c = centroid(pts);
-
-  // Move each vertex toward centroid by `inset`, clamped by distance to centroid
-  const out: Array<{ x: number; y: number }> = [];
-  for (const p of pts) {
-    const vx = c.x - p.x;
-    const vy = c.y - p.y;
-    const len = Math.hypot(vx, vy);
-    if (len <= 1e-6) return null;
-
-    const d = Math.min(inset, len * 0.45); // prevent collapsing
-    const ux = vx / len;
-    const uy = vy / len;
-
-    out.push({ x: p.x + ux * d, y: p.y + uy * d });
+  // Optional: ensure polygon is generally valid and inside rib (sample a centroid check)
+  const c = centroid(poly);
+  if (!pointInPolygon(c, outline)) {
+    // if centroid isn't inside, something's off—return empty rather than emitting junk
+    return [];
   }
 
-  return out;
+  return poly;
 }
 
-function centroid(pts: Array<{ x: number; y: number }>): { x: number; y: number } {
+function centroid(pts: Point[]): Point {
   let x = 0;
   let y = 0;
   for (const p of pts) {
@@ -205,25 +172,30 @@ function centroid(pts: Array<{ x: number; y: number }>): { x: number; y: number 
   return { x: x / pts.length, y: y / pts.length };
 }
 
-function equilateralTriangle(cx: number, cy: number, r: number, rotRad: number): Array<{ x: number; y: number }> {
-  // vertices on a circle of radius r
-  const pts: Array<{ x: number; y: number }> = [];
-  for (let i = 0; i < 3; i++) {
-    const a = rotRad + (Math.PI * 2 * i) / 3;
-    pts.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r });
+function boundsX(pts: Point[]) {
+  let minX = Infinity;
+  let maxX = -Infinity;
+  for (const p of pts) {
+    minX = Math.min(minX, p.x);
+    maxX = Math.max(maxX, p.x);
   }
-  return pts;
+  if (!isFinite(minX)) return { minX: 0, maxX: 0 };
+  return { minX, maxX };
 }
 
-function lerp(a: number, b: number, t: number): number {
+function lerp(a: number, b: number, t: number) {
   return a + (b - a) * t;
 }
 
-function clamp(v: number, lo: number, hi: number): number {
+function clamp(v: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, v));
 }
 
-function assertSpec(spec: WingSpecV1): void {
+function clampInt(v: number, lo: number, hi: number) {
+  return Math.max(lo, Math.min(hi, Math.floor(v)));
+}
+
+function assertSpec(spec: WingSpecV1) {
   if (spec.version !== 1) throw new Error("WingSpecV1 version mismatch");
   if (spec.span <= 0) throw new Error("span must be > 0");
   if (spec.rootChord <= 0 || spec.tipChord <= 0) throw new Error("rootChord and tipChord must be > 0");
@@ -236,14 +208,14 @@ function assertSpec(spec: WingSpecV1): void {
   for (const s of spec.spars) {
     if (s.xFrac < 0 || s.xFrac > 1) throw new Error("spar xFrac must be in [0..1]");
     if (s.stockSize <= 0) throw new Error("spar stockSize must be > 0");
-    if (s.edge !== "top" && s.edge !== "bottom" && s.edge !== "both") throw new Error("spar edge invalid");
   }
 
-  const lh = spec.ribFeatures.lighteningHoles;
-  if (lh.count < 0) throw new Error("lightening hole count must be >= 0");
+  const wl = spec.ribFeatures.webLattice;
+  if (wl.pitch <= 0) throw new Error("webLattice.pitch must be > 0");
+  if (wl.webMargin < 0) throw new Error("webLattice.webMargin must be >= 0");
 }
 
-function yExtremaAtX(outline: Array<{ x: number; y: number }>, x: number): { yTop: number; yBottom: number } {
+function yExtremaAtX(outline: Point[], x: number): { yTop: number; yBottom: number } {
   const ys: number[] = [];
 
   for (let i = 0; i < outline.length - 1; i++) {
@@ -274,4 +246,10 @@ function yExtremaAtX(outline: Array<{ x: number; y: number }>, x: number): { yTo
     yBottom = Math.min(yBottom, y);
   }
   return { yTop, yBottom };
+}
+
+function yExtremaAtXSafe(outline: Point[], x: number): { yTop: number; yBottom: number; ok: boolean } {
+  const { yTop, yBottom } = yExtremaAtX(outline, x);
+  const ok = isFinite(yTop) && isFinite(yBottom) && yTop > yBottom;
+  return { yTop, yBottom, ok };
 }

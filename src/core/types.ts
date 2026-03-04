@@ -1,3 +1,7 @@
+export type Units = "mm" | "in";
+
+export type Point = { x: number; y: number };
+
 export type WingSpecV1 = {
   version: 1;
   units: Units;
@@ -48,14 +52,24 @@ export type WingSpecV1 = {
 
 export type CutPrimitive =
   | { kind: "rect"; id: string; x: number; y: number; w: number; h: number }
-  | { kind: "circle"; id: string; cx: number; cy: number; r: number };
+  | { kind: "circle"; id: string; cx: number; cy: number; r: number }
+  | { kind: "poly"; id: string; pts: Point[]; cornerRadius?: number };
 
 export type Rib2D = {
   id: string;
   stationY: number;
   chord: number;
-  outline: Array<{ x: number; y: number }>; // closed polygon
+
+  // closed polygon (first point equals last point)
+  outline: Point[];
+
   cutouts: CutPrimitive[];
+
+  // Step 1 will populate this when webLattice.enabled is true
+  webRegion?: {
+    betweenSpars: [number, number];
+    pts: Point[];
+  };
 };
 
 export type WingArtifactsV1 = {

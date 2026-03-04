@@ -30,6 +30,15 @@ describe("generateWingV1", () => {
           xStartFrac: 0.3,
           xEndFrac: 0.7,
           yOffsetFrac: 0,
+          cornerFrac: 0.18,
+        },
+        webLattice: {
+          enabled: false,
+          betweenSpars: [0, 0], // irrelevant while disabled; kept for type completeness
+          pitch: 14,
+          angleDeg: 60,
+          webMargin: 4,
+          cornerRadius: 1.5,
         },
       },
     };
@@ -46,6 +55,7 @@ describe("generateWingV1", () => {
       // Should include 2 notches for edge="both" plus optional holes
       const notchRects = rib.cutouts.filter((c) => c.kind === "rect");
       expect(notchRects.length).toBe(2);
+
       for (const c of notchRects) {
         if (c.kind === "rect") {
           expect(c.w).toBeGreaterThan(0);

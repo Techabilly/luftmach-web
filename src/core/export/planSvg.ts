@@ -6,13 +6,19 @@ type PlanOptions = {
   showSparLines: boolean;
   showLabels: boolean;
 };
-
+function polyPathD(pts: Array<{ x: number; y: number }>): string {
+  if (!pts.length) return "";
+  let d = `M ${pts[0].x} ${pts[0].y}`;
+  for (let i = 1; i < pts.length; i++) d += ` L ${pts[i].x} ${pts[i].y}`;
+  return d + " Z";
+}
 export function wingPlanToSvg(wing: WingArtifactsV1, opts: PlanOptions): string {
   const m = opts.margin;
 
   const halfSpan = wing.spec.span / 2;
   const root = wing.spec.rootChord;
   const tip = wing.spec.tipChord;
+
 
   // Trapezoid planform including sweepLE (LE at tip is shifted by sweepLE)
   const left = [
@@ -47,6 +53,16 @@ export function wingPlanToSvg(wing: WingArtifactsV1, opts: PlanOptions): string 
       // station line across root chord for readability
       guides.push(`<line x1="${0 + dx}" y1="${y + dy}" x2="${root + dx}" y2="${y + dy}" />`);
       guides.push(`<line x1="${0 + dx}" y1="${-y + dy}" x2="${root + dx}" y2="${-y + dy}" />`);
+    }
+  }
+
+  // Web regions from ribs that computed them (GUIDES)
+  // these are closed polygons offset by the same ${dx},${dy} translation
+  for (const rib of wing.ribs) {
+    if (rib.webRegion && rib.webRegion.pts.length) {
+      // translate points before building path
+      const transPts = rib.webRegion.pts.map((p) => ({ x: p.x + dx, y: p.y + dy }));
+      guides.push(`<path d="${polyPathD(transPts)}" />`);
     }
   }
 
@@ -101,6 +117,14 @@ function pathD(pts: Array<{ x: number; y: number }>, dx: number, dy: number): st
   for (let i = 1; i < pts.length; i++) d += ` L ${pts[i].x + dx} ${pts[i].y + dy}`;
   d += " Z";
   return d;
+}
+
+// polygon path with no translation – useful when pts are already in final coords
+function polyPathD(pts: Array<{ x: number; y: number }>): string {
+  if (pts.length === 0) return "";
+  let d = `M ${pts[0].x} ${pts[0].y}`;
+  for (let i = 1; i < pts.length; i++) d += ` L ${pts[i].x} ${pts[i].y}`;
+  return d + " Z";
 }
 
 function bounds(poly: Array<{ x: number; y: number }>) {
