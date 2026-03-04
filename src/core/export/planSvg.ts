@@ -119,14 +119,6 @@ function pathD(pts: Array<{ x: number; y: number }>, dx: number, dy: number): st
   return d;
 }
 
-// polygon path with no translation – useful when pts are already in final coords
-function polyPathD(pts: Array<{ x: number; y: number }>): string {
-  if (pts.length === 0) return "";
-  let d = `M ${pts[0].x} ${pts[0].y}`;
-  for (let i = 1; i < pts.length; i++) d += ` L ${pts[i].x} ${pts[i].y}`;
-  return d + " Z";
-}
-
 function bounds(poly: Array<{ x: number; y: number }>) {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const p of poly) {
