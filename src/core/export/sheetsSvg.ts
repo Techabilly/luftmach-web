@@ -37,6 +37,9 @@ export function layoutToSheetSvgs(layout: LayoutResult, sheet: SheetSpec, opts: 
             cutParts.push(`<rect x="${c.x + p.x}" y="${c.y + p.y}" width="${c.w}" height="${c.h}" />`);
           } else if (c.kind === "circle") {
             cutParts.push(`<circle cx="${c.cx + p.x}" cy="${c.cy + p.y}" r="${c.r}" />`);
+          } else if (c.kind === "poly") {
+            // NEW: polygon cutout (used by lattice + rounded-triangle holes)
+            cutParts.push(`<path d="${polyPathD(c.pts, p.x, p.y)}" />`);
           }
         }
       }
@@ -82,6 +85,15 @@ export function layoutToSheetSvgs(layout: LayoutResult, sheet: SheetSpec, opts: 
 }
 
 function pathD(pts: Array<{ x: number; y: number }>, dx: number, dy: number): string {
+  if (pts.length === 0) return "";
+  const p0 = pts[0];
+  let d = `M ${p0.x + dx} ${p0.y + dy}`;
+  for (let i = 1; i < pts.length; i++) d += ` L ${pts[i].x + dx} ${pts[i].y + dy}`;
+  d += " Z";
+  return d;
+}
+
+function polyPathD(pts: Array<{ x: number; y: number }>, dx: number, dy: number): string {
   if (pts.length === 0) return "";
   const p0 = pts[0];
   let d = `M ${p0.x + dx} ${p0.y + dy}`;

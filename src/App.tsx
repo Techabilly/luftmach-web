@@ -70,7 +70,7 @@ export default function App() {
 
   const [mode, setMode] = useState<ExportMode>("sheets");
   const [applyKerf, setApplyKerf] = useState(true);
-
+  const [showDebugLatticeOverlay, setShowDebugLatticeOverlay] = useState(false);
   // Buffered NACA input: prevents crashing while typing
   const [nacaInput, setNacaInput] = useState(spec.airfoil.code);
   useEffect(() => setNacaInput(spec.airfoil.code), [spec.airfoil.code]);
@@ -88,14 +88,15 @@ export default function App() {
     });
   }, [wing, sheet, applyKerf, spec.kerf]);
 
-  const planSvg = useMemo(() => {
-    return wingPlanToSvg(wing, {
-      margin: 20,
-      showRibStations: true,
-      showSparLines: true,
-      showLabels: true,
-    });
-  }, [wing]);
+const planSvg = useMemo(() => {
+  return wingPlanToSvg(wing, {
+    margin: 20,
+    showRibStations: true,
+    showSparLines: true,
+    showLabels: true,
+    showDebugLatticeOverlay,
+  });
+}, [wing, showDebugLatticeOverlay]);
 
   const activeSvg =
     mode === "sheets"
@@ -316,7 +317,7 @@ export default function App() {
         </div>
 
         <h3 style={{ marginTop: 16, marginBottom: 8 }}>Web lattice</h3>
-
+        
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
           <input
             type="checkbox"
@@ -333,7 +334,18 @@ export default function App() {
           />
           Enable lattice
         </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, marginTop: 8 }}>
+            <input
+              type="checkbox"
+              checked={showDebugLatticeOverlay}
+              onChange={(e) => setShowDebugLatticeOverlay(e.target.checked)}
+             />
+             Show debug overlay
+            </label>
 
+            <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
+            Shows web region, candidate lattice, and rejected cells.
+            </div>
         <Field
           label="Pitch (mm)"
           value={spec.ribFeatures.webLattice.pitch}

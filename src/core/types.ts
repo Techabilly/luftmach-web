@@ -2,6 +2,12 @@ export type Units = "mm" | "in";
 
 export type Point = { x: number; y: number };
 
+export type DebugLatticeOverlay = {
+  webRegion: Point[];
+  candidateLattice: Point[][];
+  rejectedCells: Point[][];
+};
+
 export type WingSpecV1 = {
   version: 1;
   units: Units;
@@ -60,16 +66,21 @@ export type Rib2D = {
   stationY: number;
   chord: number;
 
-  // closed polygon (first point equals last point)
+  // closed polygon
   outline: Point[];
 
   cutouts: CutPrimitive[];
 
-  // Step 1 will populate this when webLattice.enabled is true
+  // Step 1: computed band between selected spars (GUIDE in plan view)
   webRegion?: {
     betweenSpars: [number, number];
     pts: Point[];
   };
+  
+  debugLattice?: DebugLatticeOverlay;
+
+  // Step 2: preview polygons for the lattice (GUIDE in plan view)
+  webLatticeCells?: Point[][];
 };
 
 export type WingArtifactsV1 = {

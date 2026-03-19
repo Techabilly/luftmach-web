@@ -1,10 +1,11 @@
-import type { WingArtifactsV1 } from "../types";
+import type { Point, WingArtifactsV1 } from "../types";
 
 type PlanOptions = {
   margin: number;
   showRibStations: boolean;
   showSparLines: boolean;
   showLabels: boolean;
+  showDebugLatticeOverlay?: boolean;  
 };
 function polyPathD(pts: Array<{ x: number; y: number }>): string {
   if (!pts.length) return "";
@@ -12,13 +13,19 @@ function polyPathD(pts: Array<{ x: number; y: number }>): string {
   for (let i = 1; i < pts.length; i++) d += ` L ${pts[i].x} ${pts[i].y}`;
   return d + " Z";
 }
+function openPolyPathD(pts: Array<{ x: number; y: number }>): string {
+  if (!pts.length) return "";
+  let d = `M ${pts[0].x} ${pts[0].y}`;
+  for (let i = 1; i < pts.length; i++) d += ` L ${pts[i].x} ${pts[i].y}`;
+  return d;
+}
+
 export function wingPlanToSvg(wing: WingArtifactsV1, opts: PlanOptions): string {
   const m = opts.margin;
-
+  const showDebug = !!opts.showDebugLatticeOverlay;
   const halfSpan = wing.spec.span / 2;
   const root = wing.spec.rootChord;
   const tip = wing.spec.tipChord;
-
 
   // Trapezoid planform including sweepLE (LE at tip is shifted by sweepLE)
   const left = [
@@ -38,6 +45,7 @@ export function wingPlanToSvg(wing: WingArtifactsV1, opts: PlanOptions): string 
 
   const guides: string[] = [];
   const engrave: string[] = [];
+  const debug: string[] = [];
 
   // Planform outlines (GUIDES)
   guides.push(`<path d="${pathD(left, dx, dy)}" />`);
@@ -50,7 +58,6 @@ export function wingPlanToSvg(wing: WingArtifactsV1, opts: PlanOptions): string 
   if (opts.showRibStations) {
     for (const rib of wing.ribs) {
       const y = rib.stationY;
-      // station line across root chord for readability
       guides.push(`<line x1="${0 + dx}" y1="${y + dy}" x2="${root + dx}" y2="${y + dy}" />`);
       guides.push(`<line x1="${0 + dx}" y1="${-y + dy}" x2="${root + dx}" y2="${-y + dy}" />`);
     }
@@ -65,7 +72,37 @@ export function wingPlanToSvg(wing: WingArtifactsV1, opts: PlanOptions): string 
       guides.push(`<path d="${polyPathD(transPts)}" />`);
     }
   }
+  // Debug lattice overlay
+  if (showDebug) {
+    for (const rib of wing.ribs) {
+      const dbg = rib.debugLattice;
+      if (!dbg) continue;
 
+      if (dbg.rejectedCells.length) {
+        debug.push(`
+          <g fill="rgba(255,0,0,0.10)" stroke="rgba(255,0,0,0.45)" stroke-width="0.2">
+            ${dbg.rejectedCells.map((cell) => `<path d="${cellPath(cell, dx, dy)}" />`).join("\n")}
+          </g>
+        `);
+      }
+
+      if (dbg.candidateLattice.length) {
+        debug.push(`
+          <g fill="rgba(0,128,255,0.10)" stroke="rgba(0,128,255,0.55)" stroke-width="0.25">
+            ${dbg.candidateLattice.map((cell) => `<path d="${cellPath(cell, dx, dy)}" />`).join("\n")}
+          </g>
+        `);
+      }
+
+      if (dbg.webRegion.length) {
+        debug.push(`
+          <g fill="rgba(0,200,120,0.08)" stroke="rgba(0,160,90,0.9)" stroke-width="0.45">
+            <path d="${polyPathD(translatePts(dbg.webRegion, dx, dy))}" />
+          </g>
+        `);
+      }
+    }
+  }
   // Spar lines (GUIDES) + labels (ENGRAVE)
   if (opts.showSparLines) {
     const dChordDy = (tip - root) / halfSpan;
@@ -77,7 +114,6 @@ export function wingPlanToSvg(wing: WingArtifactsV1, opts: PlanOptions): string 
       const xRoot = 0 + s.xFrac * root;
       const xTip = wing.spec.sweepLE + s.xFrac * tip;
 
-      // draw actual spar line from root to tip on both panels
       guides.push(`<line x1="${xRoot + dx}" y1="${0 + dy}" x2="${xTip + dx}" y2="${halfSpan + dy}" />`);
       guides.push(`<line x1="${xRoot + dx}" y1="${0 + dy}" x2="${xTip + dx}" y2="${-halfSpan + dy}" />`);
 
@@ -85,7 +121,6 @@ export function wingPlanToSvg(wing: WingArtifactsV1, opts: PlanOptions): string 
         const dxdy = dXLEdy + s.xFrac * dChordDy;
         const angleDeg = (Math.atan(dxdy) * 180) / Math.PI;
 
-        // label near root, offset slightly up so it’s readable
         const label = `spar ${i + 1}  x=${s.xFrac.toFixed(2)}  size=${fmt(wing.spec.units, s.stockSize)}  edge=${s.edge}  ang=${angleDeg.toFixed(1)}°`;
         engrave.push(
           `<text x="${xRoot + dx + 2}" y="${dy + 14 + i * 12}" font-size="10">${escapeXml(label)}</text>`
@@ -97,19 +132,28 @@ export function wingPlanToSvg(wing: WingArtifactsV1, opts: PlanOptions): string 
   const width = b.maxX - b.minX + m * 2;
   const height = b.maxY - b.minY + m * 2;
 
-  return `<?xml version="1.0" encoding="UTF-8"?>
+   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg"
      width="${width}" height="${height}"
      viewBox="0 0 ${width} ${height}">
   <g id="GUIDES" fill="none" stroke="#808080" stroke-width="0.3">
     ${guides.join("\n")}
   </g>
+  <g id="DEBUG">
+    ${debug.join("\n")}
+  </g>
   <g id="ENGRAVE" fill="#808080" stroke="#808080" stroke-width="0.2">
     ${engrave.join("\n")}
   </g>
 </svg>`;
 }
+function translatePts(pts: Point[], dx: number, dy: number): Point[] {
+  return pts.map((p) => ({ x: p.x + dx, y: p.y + dy }));
+}
 
+function cellPath(cell: Point[], dx: number, dy: number): string {
+  return openPolyPathD([...translatePts(cell, dx, dy), { x: cell[0].x + dx, y: cell[0].y + dy }]);
+}
 function pathD(pts: Array<{ x: number; y: number }>, dx: number, dy: number): string {
   if (pts.length === 0) return "";
   const p0 = pts[0];

@@ -125,6 +125,12 @@ function placePart(c: Candidate, placeX: number, placeY: number, sheetIndex: num
     if (cu.kind === "circle") {
       return { ...cu, cx: cu.cx - c.b.minX, cy: cu.cy - c.b.minY };
     }
+    if (cu.kind === "poly") {
+      return {
+        ...cu,
+        pts: cu.pts.map((p) => ({ x: p.x - c.b.minX, y: p.y - c.b.minY })),
+      };
+    }
     return cu;
   });
 
@@ -149,18 +155,28 @@ function placePart(c: Candidate, placeX: number, placeY: number, sheetIndex: num
           { x: cu.x, y: cu.y + cu.h },
         ].map((p) => ({ x: p.y, y: w0 - p.x }));
 
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        for (const c of corners) {
-          minX = Math.min(minX, c.x);
-          minY = Math.min(minY, c.y);
-          maxX = Math.max(maxX, c.x);
-          maxY = Math.max(maxY, c.y);
+        let minX = Infinity,
+          minY = Infinity,
+          maxX = -Infinity,
+          maxY = -Infinity;
+        for (const q of corners) {
+          minX = Math.min(minX, q.x);
+          minY = Math.min(minY, q.y);
+          maxX = Math.max(maxX, q.x);
+          maxY = Math.max(maxY, q.y);
         }
         return { ...cu, x: minX, y: minY, w: maxX - minX, h: maxY - minY };
       }
 
       if (cu.kind === "circle") {
         return { ...cu, cx: cu.cy, cy: w0 - cu.cx };
+      }
+
+      if (cu.kind === "poly") {
+        return {
+          ...cu,
+          pts: cu.pts.map((p: any) => ({ x: p.y, y: w0 - p.x })),
+        };
       }
 
       return cu;
@@ -189,7 +205,10 @@ function placePart(c: Candidate, placeX: number, placeY: number, sheetIndex: num
 }
 
 function bounds(poly: Array<{ x: number; y: number }>) {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
   for (const p of poly) {
     minX = Math.min(minX, p.x);
     minY = Math.min(minY, p.y);
