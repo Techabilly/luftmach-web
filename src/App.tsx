@@ -32,25 +32,25 @@ const defaultSpec: WingSpecV1 = {
     { xFrac: 0.6, stockSize: (1 / 8) * INCH_TO_MM, edge: "both" },
   ],
 
- ribFeatures: {
-  lighteningHoles: {
-    enabled: false,
-    count: 2,
-    radiusFrac: 0.06,
-    xStartFrac: 0.32,
-    xEndFrac: 0.72,
-    yOffsetFrac: 0,
-    cornerFrac: 0.18,
+  ribFeatures: {
+    lighteningHoles: {
+      enabled: false,
+      count: 0,
+      radiusFrac: 0.06,
+      xStartFrac: 0.32,
+      xEndFrac: 0.72,
+      yOffsetFrac: 0,
+      cornerFrac: 0.18,
+    },
+    webLattice: {
+      enabled: true,
+      betweenSpars: [0, 1],
+      pitch: 8,
+      angleDeg: 0,
+      webMargin: 2,
+      cornerRadius: 0.8,
+    },
   },
-  webLattice: {
-    enabled: false,            // initially off
-    betweenSpars: [0, 1],      // default between spar 1 and 2
-    pitch: 14,                 // lattice spacing in mm
-    angleDeg: 60,              // rotation
-    webMargin: 4,              // inset from spar boundaries
-    cornerRadius: 1.5,         // rounded corner radius
-  },
-},
 };
 
 const defaultSheet: SheetSpec = {
@@ -315,99 +315,108 @@ export default function App() {
           </div>
         </div>
 
-        <h3 style={{ marginTop: 16, marginBottom: 8 }}>Rib realism</h3>
+        <h3 style={{ marginTop: 16, marginBottom: 8 }}>Web lattice</h3>
 
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
           <input
             type="checkbox"
-            checked={spec.ribFeatures.lighteningHoles.enabled}
+            checked={spec.ribFeatures.webLattice.enabled}
             onChange={(e) =>
               setSpec((s) => ({
                 ...s,
                 ribFeatures: {
                   ...s.ribFeatures,
-                  lighteningHoles: { ...s.ribFeatures.lighteningHoles, enabled: e.target.checked },
+                  webLattice: { ...s.ribFeatures.webLattice, enabled: e.target.checked },
                 },
               }))
             }
           />
-          Lightening holes
+          Enable lattice
         </label>
 
         <Field
-          label="Hole count"
-          value={spec.ribFeatures.lighteningHoles.count}
+          label="Pitch (mm)"
+          value={spec.ribFeatures.webLattice.pitch}
+          step={0.5}
+          onChange={(v) =>
+            setSpec((s) => ({
+              ...s,
+              ribFeatures: {
+                ...s.ribFeatures,
+                webLattice: { ...s.ribFeatures.webLattice, pitch: Math.max(1, v) },
+              },
+            }))
+          }
+        />
+
+        <Field
+          label="Angle (deg)"
+          value={spec.ribFeatures.webLattice.angleDeg}
           step={1}
           onChange={(v) =>
             setSpec((s) => ({
               ...s,
               ribFeatures: {
                 ...s.ribFeatures,
-                lighteningHoles: { ...s.ribFeatures.lighteningHoles, count: Math.max(0, Math.round(v)) },
+                webLattice: { ...s.ribFeatures.webLattice, angleDeg: v },
               },
             }))
           }
         />
 
         <Field
-          label="Hole radius (frac of chord)"
-          value={spec.ribFeatures.lighteningHoles.radiusFrac}
-          step={0.01}
+          label="Web margin (mm)"
+          value={spec.ribFeatures.webLattice.webMargin}
+          step={0.5}
           onChange={(v) =>
             setSpec((s) => ({
               ...s,
               ribFeatures: {
                 ...s.ribFeatures,
-                lighteningHoles: { ...s.ribFeatures.lighteningHoles, radiusFrac: clamp(v, 0.01, 0.25) },
+                webLattice: { ...s.ribFeatures.webLattice, webMargin: Math.max(0, v) },
               },
             }))
           }
         />
 
         <Field
-          label="Hole start xFrac"
-          value={spec.ribFeatures.lighteningHoles.xStartFrac}
-          step={0.01}
+          label="Corner radius (mm)"
+          value={spec.ribFeatures.webLattice.cornerRadius}
+          step={0.1}
           onChange={(v) =>
             setSpec((s) => ({
               ...s,
               ribFeatures: {
                 ...s.ribFeatures,
-                lighteningHoles: { ...s.ribFeatures.lighteningHoles, xStartFrac: clamp(v, 0.05, 0.95) },
+                webLattice: { ...s.ribFeatures.webLattice, cornerRadius: Math.max(0, v) },
               },
             }))
           }
         />
 
-        <Field
-          label="Hole end xFrac"
-          value={spec.ribFeatures.lighteningHoles.xEndFrac}
-          step={0.01}
-          onChange={(v) =>
-            setSpec((s) => ({
-              ...s,
-              ribFeatures: {
-                ...s.ribFeatures,
-                lighteningHoles: { ...s.ribFeatures.lighteningHoles, xEndFrac: clamp(v, 0.05, 0.95) },
-              },
-            }))
-          }
-        />
-
-        <Field
-          label="Hole yOffset frac"
-          value={spec.ribFeatures.lighteningHoles.yOffsetFrac}
-          step={0.01}
-          onChange={(v) =>
-            setSpec((s) => ({
-              ...s,
-              ribFeatures: {
-                ...s.ribFeatures,
-                lighteningHoles: { ...s.ribFeatures.lighteningHoles, yOffsetFrac: clamp(v, -0.25, 0.25) },
-              },
-            }))
-          }
-        />
+        <div style={{ marginTop: 12 }}>
+          <label style={{ display: "block", fontSize: 12, opacity: 0.8 }}>Between spars</label>
+          <select
+            value={spec.ribFeatures.webLattice.betweenSpars.join(",")}
+            onChange={(e) => {
+              const [a, b] = e.target.value.split(",").map(Number);
+              setSpec((s) => ({
+                ...s,
+                ribFeatures: {
+                  ...s.ribFeatures,
+                  webLattice: { ...s.ribFeatures.webLattice, betweenSpars: [a, b] },
+                },
+              }));
+            }}
+            style={{ width: "100%" }}
+          >
+            {spec.spars.slice(0, -1).map((_, i) => (
+              <option key={i} value={`${i},${i + 1}`}>
+                Spar {i + 1} to Spar {i + 2}
+              </option>
+            ))}
+          </select>
+        </div>
 
         {mode === "sheets" && (
           <>
